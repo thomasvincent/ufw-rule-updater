@@ -1,0 +1,18 @@
+# Use a base image with shell capabilities
+FROM ubuntu:latest
+
+# Install curl, ufw, git, and other dependencies
+RUN apt-get update && \
+    apt-get install -y curl ufw git
+
+# Install BATS
+RUN git clone https://github.com/bats-core/bats-core.git && \
+    cd bats-core && \
+    ./install.sh /usr/local
+
+# Copy the script and the test file into the container
+COPY cf_ufw.sh /cf_ufw.sh
+COPY test_cf_ufw.bats /test_cf_ufw.bats
+
+# Set the entrypoint to run BATS with the test file
+ENTRYPOINT ["bats", "/test_cf_ufw.bats"]

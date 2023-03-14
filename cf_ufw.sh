@@ -2,7 +2,7 @@
 
 # This script updates the UFW rules to permit only HTTP and HTTPS traffic originating from Cloudflare IP addresses.
 # For further information and documentation, visit:
-# https://github.com/jakejarvis/cloudflare-ufw-updater/blob/master/README.md
+# https://github.com/thomasvincent/cloudflare-ufw-updater/blob/master/README.md
 #
 
 set -eu

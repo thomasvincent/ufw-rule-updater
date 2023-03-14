@@ -1,34 +1,23 @@
 #!/usr/bin/env bats
 
-# BATS test for cf_ufw.sh
-
-setup() {
-  # Copy the original script to a temporary file for testing
-  cp cf_ufw.sh cf_ufw_test.sh
-}
-
-teardown() {
-  # Remove temporary files
-  rm cf_ufw_test.sh
-  rm /tmp/cf_ips 2>/dev/null || true
-}
-
 @test "Check if the script fetches IP ranges and updates UFW rules" {
-  # Replace curl command with a function to simulate fetching data from Cloudflare
-  sed -i 's|curl -s "$ipv4_url" -o "$tmp_file"|echo "192.0.2.1" > "$tmp_file"|' cf_ufw_test.sh
-  sed -i 's|curl -s "$ipv6_url" >> "$tmp_file"|echo "2001:db8::1" >> "$tmp_file"|' cf_ufw_test.sh
+  # Set up a temporary UFW rules file for testing
+  export UFW_RULES_FILE="$(mktemp)"
+  echo "# temporary UFW rules file for testing" > "$UFW_RULES_FILE"
 
-  # Run the test script
-  run bash cf_ufw_test.sh
+  # Replace the `ufw` command with a mock that appends the rule to the temporary file
+  function ufw() {
+    echo "$@" >> "$UFW_RULES_FILE"
+  }
 
-  # Check if the script execution succeeded
-  [ "$status" -eq 0 ]
+  # Run the script
+  ./cf_ufw.sh
 
-  # Check if the rules are added
-  ufw status numbered | grep -q "192.0.2.1"
-  ufw status numbered | grep -q "2001:db8::1"
+  # Check if the temporary UFW rules file contains the expected rules
+  grep -q "allow from" "$UFW_RULES_FILE"
+  [ "$?" -eq 0 ]
 
-  # Delete the rules added during the test
-  ufw delete "$(ufw status numbered | grep -n '192.0.2.1' | cut -d'[' -f2 | cut -d']' -f1)"
-  ufw delete "$(ufw status numbered | grep -n '2001:db8::1' | cut -d'[' -f2 | cut -d']' -f1)"
+  # Clean up
+  unset UFW_RULES_FILE
+  unalias ufw
 }

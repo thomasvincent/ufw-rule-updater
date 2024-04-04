@@ -7,13 +7,13 @@
 set -eu
 
 # Define variables
-TEMP_FILE=$(mktemp)
-CLOUDFLARE_IPv4_URL="https://www.cloudflare.com/ips-v4"
-CLOUDFLARE_IPv6_URL="https://www.cloudflare.com/ips-v6"
-ALLOWED_PORTS="80,443"
-RULE_COMMENT="Cloudflare"
+CLOUDFLARE_IP_FILE=$(mktemp)
+CLOUDFLARE_IPV4_URL="https://www.cloudflare.com/ips-v4"
+CLOUDFLARE_IPV6_URL="https://www.cloudflare.com/ips-v6"
+ALLOWED_HTTP_PORTS="80,443"
+CLOUDFLARE_RULE_LABEL="Cloudflare"
 
-# Check if the required tools are installed
+# Check dependencies
 check_dependencies() {
   for cmd in ufw curl; do
     if ! command -v "$cmd" > /dev/null; then
@@ -23,7 +23,7 @@ check_dependencies() {
   done
 }
 
-# Check if the user has sufficient permissions
+# Check permissions
 check_permissions() {
   if [ "$(id -u)" -ne 0 ]; then
     printf "This script must be run as root. Aborting.\n"
@@ -31,36 +31,41 @@ check_permissions() {
   fi
 }
 
-# Fetch the latest Cloudflare IP ranges and update UFW rules accordingly
-fetch_and_update_ranges() {
-  # Retrieve the latest IPv4 and IPv6 IP ranges from Cloudflare.
-  if ! curl -s --retry 3 --retry-delay 5 "${CLOUDFLARE_IPv4_URL}" -o "${TEMP_FILE}"; then
-    printf "Failed to fetch IPv4 addresses. Aborting.\n"
+# Fetch latest IPv4 addresses
+fetch_ipv4_addresses() {
+  if ! curl -s --retry 3 --retry-delay 5 "${CLOUDFLARE_IPV4_URL}" > "$CLOUDFLARE_IP_FILE"; then
+    printf "Failed to fetch IPv4 addresses: %s\n" "$(curl -s -o /dev/null -w %{http_code})"
     exit 1
   fi
-
-  printf "\n" >> "${TEMP_FILE}"
-
-  if ! curl -s --retry 3 --retry-delay 5 "${CLOUDFLARE_IPv6_URL}" >> "${TEMP_FILE}"; then
-    printf "Failed to fetch IPv6 addresses. Aborting.\n"
-    exit 1
-  fi
-
-  # Update UFW rules to allow traffic only on ports 80 (TCP) and 443 (TCP) from the fetched IP ranges.
-  # If a rule for a specific subnet already exists, UFW will not create a duplicate rule.
-  while IFS= read -r ip; do
-    ufw allow from "${ip}" to any port "${ALLOWED_PORTS}" proto tcp comment "${RULE_COMMENT}"
-  done < "${TEMP_FILE}"
-
-  # Remove the temporary file containing the IP ranges.
-  rm "${TEMP_FILE}"
 }
 
-# Main function to run the script
+# Fetch latest IPv6 addresses
+fetch_ipv6_addresses() {
+  if ! curl -s --retry 3 --retry-delay 5 "${CLOUDFLARE_IPV6_URL}" >> "$CLOUDFLARE_IP_FILE"; then
+    printf "Failed to fetch IPv6 addresses: %s\n" "$(curl -s -o /dev/null -w %{http_code})"
+    exit 1
+  fi
+}
+
+# Update UFW rules
+update_ufw_rules() {
+  while IFS= read -r ip; do
+    ufw allow from "$ip" to any port "$ALLOWED_HTTP_PORTS" proto tcp comment "$CLOUDFLARE_RULE_LABEL"
+  done < "$CLOUDFLARE_IP_FILE"
+}
+
+# Main function
 main() {
   check_dependencies
   check_permissions
-  fetch_and_update_ranges
+  fetch_ipv4_addresses
+  fetch_ipv6_addresses
+
+  # Optional: Close temporary file explicitly
+  # cat "$CLOUDFLARE_IP_FILE" | update_ufw_rules
+
+  update_ufw_rules
+  rm -f "$CLOUDFLARE_IP_FILE"  # Ensure removal even on errors
   ufw reload
 }
 

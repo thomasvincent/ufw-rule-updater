@@ -1,14 +1,17 @@
-# Use a lightweight base image with shell capabilities
-FROM alpine:latest
+FROM ubuntu:latest
 
-# Install curl and ufw (Uncomplicated Firewall)
-RUN apk add --no-cache curl ufw
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y ufw curl
 
-# Copy the script into the container
-COPY cf_ufw.sh /cf_ufw.sh
+# Create a directory for the script
+RUN mkdir /app
 
-# Set the script as executable
-RUN chmod +x /cf_ufw.sh
+# Copy the script to the container
+COPY cloudflare-ufw-updater.sh /app/
 
-# Set the entrypoint to run the script
-ENTRYPOINT ["/cf_ufw.sh"]
+# Make the script executable
+RUN chmod +x /app/cloudflare-ufw-updater.sh
+
+# Set the entrypoint to the script
+ENTRYPOINT ["/app/cloudflare-ufw-updater.sh"]

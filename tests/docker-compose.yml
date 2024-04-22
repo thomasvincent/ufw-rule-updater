@@ -1,0 +1,9 @@
+version: '3'
+services:
+  cloudflare-ufw-updater:
+    image: ubuntu:latest
+    container_name: cloudflare-ufw-updater
+    tty: true
+    volumes:
+      - ./:/app
+    command: tail -f /dev/null

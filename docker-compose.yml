@@ -1,7 +1,0 @@
-version: "3.9"
-
-services:
-  bats_test:
-    build:
-      context: .
-      dockerfile: Dockerfile.test

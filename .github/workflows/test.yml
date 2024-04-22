@@ -13,15 +13,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up BATS
-      run: |
-        git clone https://github.com/bats-core/bats-core.git
-        cd bats-core
-        sudo ./install.sh /usr/local
+      - name: Set up BATS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
 
-    - name: Run tests
-      run: |
-        bats test_cf_ufw.bats
+      - name: Set up test environment
+        run: |
+          sudo apt-get install -y ufw curl
+
+      - name: Run tests
+        run: |
+          cd tests
+          sudo bats cloudflare_ufw_updater.bats

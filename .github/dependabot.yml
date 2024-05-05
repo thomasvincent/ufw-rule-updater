@@ -1,0 +1,1 @@
+version: 2\nupdates:\n - package-ecosystem: "github-actions"\n   directory: "/"\n   schedule:\n     interval: "weekly"\n

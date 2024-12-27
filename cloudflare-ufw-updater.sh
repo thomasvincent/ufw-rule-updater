@@ -29,13 +29,7 @@
 
 set -euo pipefail
 
-# Check Bash version compatibility - Mac OS X ships with 3.2.* for several releases. Use brew bash. =(
-if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
-    echo "This script requires Bash version 4.0 or higher. You are using Bash version ${BASH_VERSION}. Please upgrade your Bash." >&2
-    exit 1
-fi
-
-readonly CLOUDFLARE_IP_FILE="$(mktemp)"
+# Constants
 readonly CLOUDFLARE_IPV4_URL="https://www.cloudflare.com/ips-v4"
 readonly CLOUDFLARE_IPV6_URL="https://www.cloudflare.com/ips-v6"
 readonly ALLOWED_HTTP_PORTS="80,443"
@@ -45,50 +39,48 @@ readonly CONFIG_FILE="/etc/cloudflare-ufw-updater.conf"
 readonly BACKUP_FILE="/etc/ufw/cloudflare-ufw-updater.backup"
 readonly MIN_UFW_VERSION="0.36"
 
-# Clean up temporary files on exit
+# Temporary file
+CLOUDFLARE_IP_FILE=$(mktemp)
 trap 'rm -f "$CLOUDFLARE_IP_FILE"' EXIT
 
+# --- Functions ---
+
+# Check for required dependencies
 check_dependencies() {
-  local missing=0
   for cmd in ufw curl; do
-    if ! command -v "$cmd" &>/dev/null; then
-      log_error "Command not found in PATH: $cmd"
-      missing=1
-    fi
+    command -v "$cmd" &>/dev/null || { log_error "Command not found in PATH: $cmd"; exit 1; }
   done
-  if (( missing )); then
-    exit 1
-  fi
 }
 
+# Check if the script is running as root
 check_permissions() {
-  if (( EUID != 0 )); then
-    log_error "This script must be run as root. Aborting."
-    exit 1
-  fi
+  (( EUID == 0 )) || { log_error "This script must be run as root. Aborting."; exit 1; }
 }
 
+# Check UFW version
 check_ufw_version() {
-  local ufw_version
-  ufw_version="$(ufw --version | awk '{print $2}')"
-  if ! version_greater_equal "$ufw_version" "$MIN_UFW_VERSION"; then
-    log_error "UFW version $ufw_version is not compatible. Minimum required version is $MIN_UFW_VERSION."
-    exit 1
-  fi
+  local ufw_version=$(ufw --version | awk '{print $2}')
+  version_greater_equal "$ufw_version" "$MIN_UFW_VERSION" || { 
+    log_error "UFW version $ufw_version is not compatible. Minimum required version is $MIN_UFW_VERSION."; 
+    exit 1; 
+  }
 }
 
+# Compare two version strings
 version_greater_equal() {
   printf '%s\n%s' "$1" "$2" | sort -C -V
 }
 
+# Fetch Cloudflare IP addresses
 fetch_addresses() {
   local url="$1"
-  if ! curl -s --retry 3 --retry-delay 5 "$url" >> "$CLOUDFLARE_IP_FILE"; then
-    log_error "Failed to fetch addresses from $url"
-    exit 1
-  fi
+  curl -s --retry 3 --retry-delay 5 "$url" >> "$CLOUDFLARE_IP_FILE" || { 
+    log_error "Failed to fetch addresses from $url"; 
+    exit 1; 
+  }
 }
 
+# Update UFW rules
 update_ufw_rules() {
   # Delete existing Cloudflare rules
   ufw delete allow from any to any port "$ALLOWED_HTTP_PORTS" proto tcp comment "$CLOUDFLARE_RULE_LABEL"
@@ -99,14 +91,17 @@ update_ufw_rules() {
   done < "$CLOUDFLARE_IP_FILE"
 }
 
+# Log a message to the log file
 log_message() {
   printf "%s - %s\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$1" | tee -a "$LOG_FILE"
 }
 
+# Log an error message to the log file and stderr
 log_error() {
   printf "%s - [ERROR] %s\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$1" | tee -a "$LOG_FILE" >&2
 }
 
+# Load configuration from a file
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck source=/etc/cloudflare-ufw-updater.conf
@@ -122,19 +117,19 @@ load_config() {
   BACKUP_FILE="${BACKUP_FILE:-$BACKUP_FILE}"
 }
 
+# Backup existing UFW rules
 backup_ufw_rules() {
   ufw status numbered | tee "$BACKUP_FILE"
   log_message "Backed up UFW rules to $BACKUP_FILE"
 }
 
+# Restore UFW rules from a backup file
 restore_ufw_rules() {
   if [[ -f "$BACKUP_FILE" ]]; then
     ufw reset 1>/dev/null
     while read -r rule; do
       # Skip comment lines
-      if [[ $rule =~ ^\s*# ]]; then
-        continue
-      fi
+      [[ $rule =~ ^\s*# ]] && continue
       ufw "$rule"
     done < "$BACKUP_FILE"
     log_message "Restored UFW rules from $BACKUP_FILE"
@@ -143,6 +138,7 @@ restore_ufw_rules() {
   fi
 }
 
+# Main function
 main() {
   check_dependencies
   check_permissions

@@ -8,34 +8,26 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
-
     - name: Set up Bash
       uses: actions/setup-bash@v3
-
     - name: Run shellcheck
       uses: ludeeus/action-shellcheck@master
       with:
         severity: error
-
     - name: Run tests
       run: |
         # Install dependencies (if any)
         sudo apt-get update
         sudo apt-get install -y ufw curl
-
         # Mock UFW for testing
         sudo mv /usr/sbin/ufw /usr/sbin/ufw.real
         sudo touch /usr/sbin/ufw
         sudo chmod +x /usr/sbin/ufw
-
         # Run the script with test arguments
         ./cloudflare-ufw-updater.sh
         ./cloudflare-ufw-updater.sh --restore
-
         # Restore original UFW
         sudo mv /usr/sbin/ufw.real /usr/sbin/ufw

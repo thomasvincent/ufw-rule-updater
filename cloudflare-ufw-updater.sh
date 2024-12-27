@@ -1,3 +1,10 @@
+# Create a directory structure and files to apply the fixes for the cloudflare-ufw-updater.sh script.
+
+import os
+
+# Define the file path and content
+script_path = "/mnt/data/cloudflare-ufw-updater.sh"
+script_content = """
 #!/bin/bash
 
 # MIT License
@@ -22,11 +29,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# This script updates the UFW rules to permit only HTTP and HTTPS traffic
-# originating from Cloudflare IP addresses. For further information and
-# documentation, visit:
-# https://github.com/thomasvincent/cloudflare-ufw-updater/blob/master/README.md
-
 set -euo pipefail
 
 # Constants
@@ -39,39 +41,32 @@ readonly CONFIG_FILE="/etc/cloudflare-ufw-updater.conf"
 readonly BACKUP_FILE="/etc/ufw/cloudflare-ufw-updater.backup"
 readonly MIN_UFW_VERSION="0.36"
 
-# Temporary file
 CLOUDFLARE_IP_FILE=$(mktemp)
 trap 'rm -f "$CLOUDFLARE_IP_FILE"' EXIT
 
-# --- Functions ---
-
-# Check for required dependencies
 check_dependencies() {
   for cmd in ufw curl; do
     command -v "$cmd" &>/dev/null || { log_error "Command not found in PATH: $cmd"; exit 1; }
   done
 }
 
-# Check if the script is running as root
 check_permissions() {
   (( EUID == 0 )) || { log_error "This script must be run as root. Aborting."; exit 1; }
 }
 
-# Check UFW version
 check_ufw_version() {
-  local ufw_version=$(ufw --version | awk '{print $2}')
+  local ufw_version
+  ufw_version=$(ufw --version | awk '{print $2}')
   version_greater_equal "$ufw_version" "$MIN_UFW_VERSION" || { 
     log_error "UFW version $ufw_version is not compatible. Minimum required version is $MIN_UFW_VERSION."; 
     exit 1; 
   }
 }
 
-# Compare two version strings
 version_greater_equal() {
-  printf '%s\n%s' "$1" "$2" | sort -C -V
+  printf '%s\\n%s' "$1" "$2" | sort -C -V
 }
 
-# Fetch Cloudflare IP addresses
 fetch_addresses() {
   local url="$1"
   curl -s --retry 3 --retry-delay 5 "$url" >> "$CLOUDFLARE_IP_FILE" || { 
@@ -80,9 +75,7 @@ fetch_addresses() {
   }
 }
 
-# Update UFW rules
 update_ufw_rules() {
-  # Delete existing Cloudflare rules
   ufw delete allow from any to any port "$ALLOWED_HTTP_PORTS" proto tcp comment "$CLOUDFLARE_RULE_LABEL"
 
   while IFS= read -r ip; do
@@ -91,24 +84,20 @@ update_ufw_rules() {
   done < "$CLOUDFLARE_IP_FILE"
 }
 
-# Log a message to the log file
 log_message() {
-  printf "%s - %s\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$1" | tee -a "$LOG_FILE"
+  printf "%s - %s\\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$1" | tee -a "$LOG_FILE"
 }
 
-# Log an error message to the log file and stderr
 log_error() {
-  printf "%s - [ERROR] %s\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$1" | tee -a "$LOG_FILE" >&2
+  printf "%s - [ERROR] %s\\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$1" | tee -a "$LOG_FILE" >&2
 }
 
-# Load configuration from a file
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck source=/etc/cloudflare-ufw-updater.conf
     source "$CONFIG_FILE"
   fi
 
-  # Override config values with environment variables if set
   CLOUDFLARE_IPV4_URL="${CLOUDFLARE_IPV4_URL:-$CLOUDFLARE_IPV4_URL}"
   CLOUDFLARE_IPV6_URL="${CLOUDFLARE_IPV6_URL:-$CLOUDFLARE_IPV6_URL}"
   ALLOWED_HTTP_PORTS="${ALLOWED_HTTP_PORTS:-$ALLOWED_HTTP_PORTS}"
@@ -117,19 +106,16 @@ load_config() {
   BACKUP_FILE="${BACKUP_FILE:-$BACKUP_FILE}"
 }
 
-# Backup existing UFW rules
 backup_ufw_rules() {
   ufw status numbered | tee "$BACKUP_FILE"
   log_message "Backed up UFW rules to $BACKUP_FILE"
 }
 
-# Restore UFW rules from a backup file
 restore_ufw_rules() {
   if [[ -f "$BACKUP_FILE" ]]; then
     ufw reset 1>/dev/null
     while read -r rule; do
-      # Skip comment lines
-      [[ $rule =~ ^\s*# ]] && continue
+      [[ $rule =~ ^\\s*# ]] && continue
       ufw "$rule"
     done < "$BACKUP_FILE"
     log_message "Restored UFW rules from $BACKUP_FILE"
@@ -138,7 +124,6 @@ restore_ufw_rules() {
   fi
 }
 
-# Main function
 main() {
   check_dependencies
   check_permissions
@@ -168,3 +153,10 @@ main() {
 }
 
 main "$@"
+"""
+
+# Write the corrected script to a file
+with open(script_path, "w") as script_file:
+    script_file.write(script_content)
+
+script_path

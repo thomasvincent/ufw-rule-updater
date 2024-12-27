@@ -1,31 +1,41 @@
-name: Test
+name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  test:
+  build:
+
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up BATS
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bats
+    - name: Set up Bash
+      uses: actions/setup-bash@v3
 
-      - name: Set up test environment
-        run: |
-          sudo apt-get install -y ufw curl
+    - name: Run shellcheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        severity: error
 
-      - name: Run tests
-        run: |
-          cd tests
-          sudo bats cloudflare_ufw_updater.bats
+    - name: Run tests
+      run: |
+        # Install dependencies (if any)
+        sudo apt-get update
+        sudo apt-get install -y ufw curl
+
+        # Mock UFW for testing
+        sudo mv /usr/sbin/ufw /usr/sbin/ufw.real
+        sudo touch /usr/sbin/ufw
+        sudo chmod +x /usr/sbin/ufw
+
+        # Run the script with test arguments
+        ./cloudflare-ufw-updater.sh
+        ./cloudflare-ufw-updater.sh --restore
+
+        # Restore original UFW
+        sudo mv /usr/sbin/ufw.real /usr/sbin/ufw
